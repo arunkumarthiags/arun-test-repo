@@ -1,9 +1,13 @@
 -- WT-ROS Seed Data Script
 -- Run this AFTER init-db.sql to populate the database with realistic dummy data
 -- Usage: psql -U wt_ros -d wt_ros < scripts/seed-data.sql
+-- This script is idempotent - safe to run multiple times
 
--- Clear existing data (optional - comment out if you want to add to existing data)
--- TRUNCATE work_items, work_updates, line_comments, activities CASCADE;
+-- Clear existing seed data before re-inserting
+DELETE FROM activities WHERE id LIKE 'a1000000-0000-0000-0000-%';
+DELETE FROM line_comments WHERE id LIKE 'f0000000-0000-0000-0000-%';
+DELETE FROM work_updates WHERE id LIKE 'e0000000-0000-0000-0000-%';
+DELETE FROM work_items WHERE id LIKE 'd0000000-0000-0000-0000-%';
 
 -- =====================================================
 -- WORK ITEMS - Platform Engineering Group
