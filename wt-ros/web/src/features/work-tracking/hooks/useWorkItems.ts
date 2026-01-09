@@ -95,7 +95,7 @@ async function fetchWorkItem(id: string): Promise<WorkItemQueryResponse> {
 export function useWorkItems(options: UseWorkItemsOptions = {}) {
   const { filters, sort, pageSize = 50, enabled = true } = options;
 
-  return useInfiniteQuery({
+  const query = useInfiniteQuery({
     queryKey: workItemsKeys.list(filters, sort),
     queryFn: async ({ pageParam }) => {
       const response = await fetchWorkItems({
@@ -110,7 +110,7 @@ export function useWorkItems(options: UseWorkItemsOptions = {}) {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
-      if (lastPage.workItems.pageInfo.hasNextPage) {
+      if (lastPage.workItems?.pageInfo?.hasNextPage) {
         return lastPage.workItems.pageInfo.endCursor ?? undefined;
       }
       return undefined;
@@ -125,6 +125,16 @@ export function useWorkItems(options: UseWorkItemsOptions = {}) {
     // Placeholder data from previous query for instant rendering
     placeholderData: (previousData) => previousData,
   });
+
+  // Flatten paginated results into a single array
+  const workItems: IWorkItem[] = query.data?.pages?.flatMap(
+    (page) => page.workItems?.edges?.map((edge) => edge.node) ?? []
+  ) ?? [];
+
+  return {
+    ...query,
+    workItems,
+  };
 }
 
 /**
