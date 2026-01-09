@@ -6,16 +6,134 @@ A practical guide to using the AI-Native Work Tracking System.
 
 ## Table of Contents
 
-1. [Getting Started](#getting-started)
-2. [Your First Work Item](#your-first-work-item)
-3. [Daily Workflows](#daily-workflows)
-4. [Weekly Status Updates](#weekly-status-updates)
-5. [Using AI Features](#using-ai-features)
-6. [Collaboration](#collaboration)
-7. [Keyboard Shortcuts Reference](#keyboard-shortcuts-reference)
-8. [Chrome Extension](#chrome-extension)
-9. [MCP Integration with Claude](#mcp-integration-with-claude)
-10. [Tips & Best Practices](#tips--best-practices)
+1. [Running with Dummy Data](#running-with-dummy-data)
+2. [Getting Started](#getting-started)
+3. [Your First Work Item](#your-first-work-item)
+4. [Daily Workflows](#daily-workflows)
+5. [Weekly Status Updates](#weekly-status-updates)
+6. [Using AI Features](#using-ai-features)
+7. [Collaboration](#collaboration)
+8. [Keyboard Shortcuts Reference](#keyboard-shortcuts-reference)
+9. [Chrome Extension](#chrome-extension)
+10. [MCP Integration with Claude](#mcp-integration-with-claude)
+11. [Tips & Best Practices](#tips--best-practices)
+
+---
+
+## Running with Dummy Data
+
+Follow these steps to run the application with pre-populated sample data.
+
+### Prerequisites
+
+Make sure you have installed:
+- Docker and Docker Compose
+- Node.js >= 20.0.0
+- npm >= 10.0.0
+
+### Quick Start (Recommended)
+
+```bash
+# 1. Navigate to the wt-ros directory
+cd wt-ros
+
+# 2. Start the database and cache services
+docker-compose up -d postgres redis
+
+# 3. Wait for services to be healthy (about 10-15 seconds)
+docker-compose ps
+
+# 4. The init-db.sql runs automatically and creates:
+#    - 3 Groups (Platform Engineering, Knowledge Discovery, Safety & Compliance)
+#    - 3 Teams (Backend, Frontend, Search)
+#    - 3 Users (Alice, Bob, Carol)
+
+# 5. Load the dummy work items and updates
+docker exec -i wt-ros-postgres psql -U wt_ros -d wt_ros < scripts/seed-data.sql
+
+# 6. Install dependencies and start the app
+npm install
+npm run build -w @wt-ros/common
+npm run dev
+
+# 7. Open the app
+open http://localhost:3000
+```
+
+### What's in the Dummy Data?
+
+The seed data includes realistic work items across three groups:
+
+**Platform Engineering (8 items)**
+| Priority | Title | Status | Health |
+|----------|-------|--------|--------|
+| P0 | Critical Security Vulnerability Fix | In Progress | Red |
+| P0 | Database Connection Pool Exhaustion | In Progress | Yellow |
+| P1 | OAuth2 SSO Integration | In Progress | Green |
+| P1 | API Rate Limiting | Not Started | Unknown |
+| P1 | Migrate Legacy Billing Service | Blocked | Red |
+| P2 | Dashboard Performance Optimization | In Progress | Green |
+| P2 | GraphQL Subscriptions Support | Not Started | Unknown |
+| P2 | Implement Dark Mode | In Progress | Green |
+| P3 | Update API Documentation | Not Started | Stale |
+| P3 | Refactor Legacy Test Suite | Complete | Green |
+
+**Knowledge Discovery (3 items)**
+| Priority | Title | Status | Health |
+|----------|-------|--------|--------|
+| P1 | Semantic Search with Embeddings | In Progress | Green |
+| P2 | Search Results Personalization | In Progress | Yellow |
+| P2 | Knowledge Graph Integration | Not Started | Unknown |
+
+**Safety & Compliance (2 items)**
+| Priority | Title | Status | Health |
+|----------|-------|--------|--------|
+| P1 | SOC 2 Type II Compliance Audit | In Progress | Green |
+| P1 | GDPR Data Deletion Pipeline | In Progress | Yellow |
+
+**Also includes:**
+- 6 Weekly status updates (mix of human and AI-generated)
+- 3 Line comments with @mentions
+- 6 Activity records (GitHub PRs, Slack threads, Jira tickets)
+
+### Alternative: Docker-Only Setup
+
+If you prefer to run everything in Docker:
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Load seed data
+docker exec -i wt-ros-postgres psql -U wt_ros -d wt_ros < scripts/seed-data.sql
+
+# Access the app at http://localhost:3000
+```
+
+### Resetting the Data
+
+To reset and start fresh:
+
+```bash
+# Stop all services and remove volumes
+docker-compose down -v
+
+# Start fresh (init-db.sql runs automatically)
+docker-compose up -d postgres redis
+
+# Reload seed data
+docker exec -i wt-ros-postgres psql -U wt_ros -d wt_ros < scripts/seed-data.sql
+```
+
+### Test Users
+
+The dummy data includes three test users you can work with:
+
+| Name | Email | Team | Role |
+|------|-------|------|------|
+| Alice Engineer | alice@example.com | Backend | DRI on security/infra items |
+| Bob Manager | bob@example.com | Frontend | DRI on UI/SSO items |
+| Carol Lead | carol@example.com | Search | DRI on search/discovery items |
 
 ---
 
