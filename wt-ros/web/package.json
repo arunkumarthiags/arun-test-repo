@@ -24,7 +24,7 @@
     "@tiptap/pm": "^2.5.9",
     "@tiptap/react": "^2.5.9",
     "@tiptap/starter-kit": "^2.5.9",
-    "@wt-ros/common": "workspace:*",
+    "@wt-ros/common": "*",
     "graphql": "^16.9.0",
     "graphql-request": "^7.1.0",
     "jotai": "^2.9.3",

@@ -18,7 +18,7 @@
     "db:seed": "psql $DATABASE_URL -f ../scripts/seed-data.sql"
   },
   "dependencies": {
-    "@wt-ros/common": "workspace:*",
+    "@wt-ros/common": "*",
     "apollo-server-express": "^3.13.0",
     "class-validator": "^0.14.1",
     "dataloader": "^2.2.2",
