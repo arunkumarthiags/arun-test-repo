@@ -82,3 +82,26 @@ export interface IncomeVsExpenses {
   expenses: number;
   net: number;
 }
+
+export interface ParsedTransaction {
+  date: string;
+  amount: number;
+  description: string;
+  category?: string;
+  isDuplicate: boolean;
+  confidence: number;
+}
+
+export interface ColumnMapping {
+  date: string | number;
+  amount: string | number;
+  description: string | number;
+  category?: string | number;
+  confidence: number;
+}
+
+export interface ImportSummary {
+  imported: number;
+  skipped: number;
+  errors: string[];
+}

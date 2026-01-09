@@ -3,6 +3,7 @@ import { PlaidItemModel } from '../models/PlaidItem';
 import { AccountModel } from '../models/Account';
 import { TransactionModel } from '../models/Transaction';
 import { categorizeTransaction, determineTransactionType } from '../utils/categorizer';
+import { db } from '../utils/database';
 
 // Initialize Plaid client
 const configuration = new Configuration({
@@ -21,17 +22,32 @@ export const plaidClient = new PlaidApi(configuration);
  * Create a link token for Plaid Link initialization
  */
 export async function createLinkToken(userId: string): Promise<string> {
-  const request = {
-    user: { client_user_id: userId },
-    client_name: 'Finance Tracker',
-    products: [Products.Transactions],
-    country_codes: [CountryCode.Us],
-    language: 'en',
-    webhook: process.env.WEBHOOK_URL,
-  };
+  try {
+    console.log('Creating link token with credentials:', {
+      clientId: process.env.PLAID_CLIENT_ID ? 'SET' : 'MISSING',
+      secret: process.env.PLAID_SECRET ? 'SET' : 'MISSING',
+      env: process.env.PLAID_ENV,
+    });
 
-  const response = await plaidClient.linkTokenCreate(request);
-  return response.data.link_token;
+    const request: any = {
+      user: { client_user_id: userId },
+      client_name: 'Finance Tracker',
+      products: [Products.Transactions],
+      country_codes: [CountryCode.Us],
+      language: 'en',
+    };
+
+    // Add webhook only if configured
+    if (process.env.WEBHOOK_URL) {
+      request.webhook = process.env.WEBHOOK_URL;
+    }
+
+    const response = await plaidClient.linkTokenCreate(request);
+    return response.data.link_token;
+  } catch (error: any) {
+    console.error('Plaid link token creation error:', error.response?.data || error.message);
+    throw error;
+  }
 }
 
 /**
@@ -182,6 +198,7 @@ export async function syncTransactions(itemId: string): Promise<number> {
 
     // Process removed transactions
     for (const txn of response.data.removed) {
+      if (!txn.transaction_id) continue;
       const existing = TransactionModel.findByPlaidId(txn.transaction_id);
       if (existing) {
         TransactionModel.delete(existing.id);
@@ -221,7 +238,7 @@ export async function refreshBalances(itemId: string): Promise<void> {
       AccountModel.updateBalance(
         localAccount.id,
         account.balances.current || 0,
-        account.balances.available
+        account.balances.available ?? undefined
       );
     }
   }
@@ -243,8 +260,18 @@ export async function removeItem(itemId: string): Promise<void> {
     console.error('Error removing item from Plaid:', error);
   }
 
-  // Deactivate accounts
+  // Delete all transactions from these accounts
   const accounts = AccountModel.findByItemId(itemId);
+  const accountIds = accounts.map(acc => acc.id);
+
+  if (accountIds.length > 0) {
+    // Delete all transactions for these accounts
+    const placeholders = accountIds.map(() => '?').join(',');
+    db.prepare(`DELETE FROM transactions WHERE account_id IN (${placeholders})`).run(...accountIds);
+    console.log(`Deleted transactions for ${accountIds.length} accounts`);
+  }
+
+  // Delete accounts
   for (const account of accounts) {
     AccountModel.delete(account.id);
   }

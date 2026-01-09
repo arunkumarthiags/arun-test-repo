@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Plus, Filter, Download, Search, Edit, Trash2, Receipt } from 'lucide-react';
+import { Plus, Filter, Download, Search, Edit, Trash2, Receipt, Upload } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Transaction } from '../types';
 import { transactionApi, analyticsApi } from '../services/api';
 import { format } from 'date-fns';
 import TransactionModal from '../components/TransactionModal';
+import ImportModal from '../components/ImportModal';
 
 export default function Transactions() {
   const { transactions, accounts, categories, refreshTransactions, removeTransaction } = useApp();
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [filters, setFilters] = useState({
     search: '',
@@ -114,6 +116,13 @@ export default function Transactions() {
           <button onClick={handleExport} className="btn btn-secondary flex items-center">
             <Download size={20} className="mr-2" />
             Export CSV
+          </button>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="btn btn-secondary flex items-center"
+          >
+            <Upload size={20} className="mr-2" />
+            Import
           </button>
           <button
             onClick={() => {
@@ -284,6 +293,17 @@ export default function Transactions() {
             refreshTransactions();
             setShowModal(false);
             setSelectedTransaction(null);
+          }}
+        />
+      )}
+
+      {showImportModal && (
+        <ImportModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          onComplete={() => {
+            refreshTransactions();
+            setShowImportModal(false);
           }}
         />
       )}

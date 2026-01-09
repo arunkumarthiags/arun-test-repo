@@ -165,13 +165,15 @@ export const getSummary = asyncHandler(async (req: Request, res: Response) => {
 
   const results = db.prepare(query).all(...params) as any[];
 
+  const income = results.find(r => r.type === 'income')?.total || 0;
+  const expenses = results.find(r => r.type === 'expense')?.total || 0;
+  
   const summary = {
-    income: results.find(r => r.type === 'income')?.total || 0,
-    expenses: results.find(r => r.type === 'expense')?.total || 0,
+    income,
+    expenses,
     transactions: results.reduce((sum, r) => sum + r.count, 0),
+    net: income - expenses,
   };
-
-  summary['net'] = summary.income - summary.expenses;
 
   res.json(summary);
 });

@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import type BetterSqlite3 from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
@@ -11,7 +12,7 @@ if (!fs.existsSync(dbDir)) {
 }
 
 // Initialize database connection
-export const db = new Database(dbPath);
+export const db: BetterSqlite3.Database = new Database(dbPath);
 
 // Enable foreign keys and WAL mode for better performance
 db.pragma('foreign_keys = ON');

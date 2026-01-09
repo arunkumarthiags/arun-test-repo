@@ -10,6 +10,7 @@ interface PlaidLinkProps {
 export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     createLinkToken();
@@ -19,8 +20,10 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
     try {
       const response = await plaidApi.createLinkToken();
       setLinkToken(response.data.link_token);
+      setError(null);
     } catch (error) {
       console.error('Error creating link token:', error);
+      setError('Failed to initialize Plaid');
     }
   };
 
@@ -49,6 +52,19 @@ export default function PlaidLink({ onSuccess }: PlaidLinkProps) {
     token: linkToken,
     onSuccess: handleOnSuccess,
   });
+
+  if (error) {
+    return (
+      <button
+        onClick={createLinkToken}
+        className="btn btn-secondary flex items-center"
+        title="Click to retry"
+      >
+        <LinkIcon size={20} className="mr-2" />
+        Retry Connection
+      </button>
+    );
+  }
 
   if (!linkToken || loading) {
     return (

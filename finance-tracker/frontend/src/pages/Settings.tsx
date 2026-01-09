@@ -176,6 +176,7 @@ export default function Settings() {
                           ${account.current_balance?.toLocaleString() || '0.00'}
                         </p>
                         {account.available_balance !== undefined &&
+                          account.available_balance !== null &&
                           account.available_balance !== account.current_balance && (
                             <p className="text-sm text-gray-500">
                               Available: ${account.available_balance.toLocaleString()}

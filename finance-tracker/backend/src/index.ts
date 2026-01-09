@@ -1,7 +1,11 @@
+import dotenv from 'dotenv';
+
+// Load environment variables FIRST, before any other imports
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import { initializeDatabase } from './utils/database';
 import { errorHandler } from './middleware/errorHandler';
 import { generalLimiter } from './middleware/rateLimiter';
@@ -13,9 +17,7 @@ import accountRoutes from './routes/accounts';
 import budgetRoutes from './routes/budgets';
 import analyticsRoutes from './routes/analytics';
 import categoryRoutes from './routes/categories';
-
-// Load environment variables
-dotenv.config();
+import importRoutes from './routes/import';
 
 // Initialize database
 initializeDatabase();
@@ -46,6 +48,7 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/import', importRoutes);
 
 // Error handling
 app.use(errorHandler);

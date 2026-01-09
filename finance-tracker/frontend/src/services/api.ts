@@ -8,6 +8,9 @@ import type {
   Summary,
   SpendingByCategory,
   IncomeVsExpenses,
+  ParsedTransaction,
+  ColumnMapping,
+  ImportSummary,
 } from '../types';
 
 const api = axios.create({
@@ -99,6 +102,28 @@ export const analyticsApi = {
     category?: string;
     accountId?: string;
   }) => api.get('/analytics/export', { params, responseType: 'blob' }),
+};
+
+// Import endpoints
+export const importApi = {
+  parseFile: (file: File, accountId?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (accountId) formData.append('account_id', accountId);
+
+    return api.post<{
+      transactions: ParsedTransaction[];
+      mapping: ColumnMapping;
+      duplicates: string[];
+    }>('/import/parse', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  confirmImport: (data: {
+    transactions: ParsedTransaction[];
+    accountId?: string;
+  }) => api.post<ImportSummary>('/import/confirm', data),
 };
 
 export default api;

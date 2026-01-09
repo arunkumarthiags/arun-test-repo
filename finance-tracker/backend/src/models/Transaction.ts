@@ -111,6 +111,11 @@ export class TransactionModel {
     return db.prepare(query).all(...params) as Transaction[];
   }
 
+  static findByDateRange(startDate: string, endDate: string): Transaction[] {
+    return db.prepare('SELECT * FROM transactions WHERE date >= ? AND date <= ?')
+      .all(startDate, endDate) as Transaction[];
+  }
+
   static update(id: string, updates: Partial<Transaction>): Transaction | undefined {
     const fields: string[] = [];
     const values: any[] = [];
