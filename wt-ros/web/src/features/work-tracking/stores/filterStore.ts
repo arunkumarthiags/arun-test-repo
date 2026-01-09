@@ -25,6 +25,9 @@ import {
  */
 export const filtersAtom = atom<WorkItemFilters>({});
 
+// Alias for backward compatibility
+export const activeFiltersAtom = filtersAtom;
+
 /**
  * Clear all filters
  */
