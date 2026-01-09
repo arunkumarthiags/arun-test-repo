@@ -385,7 +385,7 @@ INSERT INTO line_comments (id, update_id, start_offset, end_offset, content, aut
 INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, content, url, metadata, occurred_at) VALUES
 -- GitHub activities
 (
-  'g0000000-0000-0000-0000-000000000001',
+  'a1000000-0000-0000-0000-000000000001',
   'd0000000-0000-0000-0000-000000000001',
   'GITHUB_PR',
   'opened',
@@ -397,7 +397,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
   NOW() - INTERVAL '2 days'
 ),
 (
-  'g0000000-0000-0000-0000-000000000002',
+  'a1000000-0000-0000-0000-000000000002',
   'd0000000-0000-0000-0000-000000000001',
   'GITHUB_PR',
   'review_approved',
@@ -409,7 +409,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
   NOW() - INTERVAL '1 day'
 ),
 (
-  'g0000000-0000-0000-0000-000000000003',
+  'a1000000-0000-0000-0000-000000000003',
   'd0000000-0000-0000-0000-000000000003',
   'GITHUB_PR',
   'opened',
@@ -423,7 +423,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
 
 -- Slack activities
 (
-  'g0000000-0000-0000-0000-000000000004',
+  'a1000000-0000-0000-0000-000000000004',
   'd0000000-0000-0000-0000-000000000005',
   'SLACK_THREAD',
   'message',
@@ -435,7 +435,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
   NOW() - INTERVAL '3 days'
 ),
 (
-  'g0000000-0000-0000-0000-000000000005',
+  'a1000000-0000-0000-0000-000000000005',
   'd0000000-0000-0000-0000-000000000002',
   'SLACK_THREAD',
   'message',
@@ -449,7 +449,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
 
 -- Jira activities
 (
-  'g0000000-0000-0000-0000-000000000006',
+  'a1000000-0000-0000-0000-000000000006',
   'd0000000-0000-0000-0000-000000000002',
   'JIRA_TICKET',
   'status_change',
