@@ -6,6 +6,7 @@
  * - Automatic cache invalidation
  * - Rollback on error
  * - Toast notifications
+ * - Robust error handling
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -25,9 +26,30 @@ import {
   ACCEPT_AI_SUGGESTED_UPDATE_MUTATION,
   ADD_LINE_COMMENT_MUTATION,
   RESOLVE_LINE_COMMENT_MUTATION,
+  parseGraphQLError,
+  GraphQLRequestError,
 } from '@/lib/graphql-client';
 import { workItemsKeys } from './useWorkItems';
 import { addNotificationAtom } from '../stores/gridStore';
+
+/**
+ * Helper to format error messages for user display
+ */
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    // Check for network errors
+    if (error.message.includes('fetch') || error.message.includes('network')) {
+      return 'Unable to connect to server. Please check your connection.';
+    }
+    return error.message;
+  }
+
+  const parsed = parseGraphQLError(error);
+  if (parsed.isNetworkError) {
+    return 'Unable to connect to server. Please check your connection.';
+  }
+  return parsed.message;
+}
 
 // ============================================
 // TYPES
@@ -150,7 +172,7 @@ export function useUpdateWorkItem() {
       }
 
       addNotification({
-        message: `Failed to update work item: ${err.message}`,
+        message: `Failed to update work item: ${formatErrorMessage(err)}`,
         severity: 'error',
       });
     },
@@ -255,7 +277,7 @@ export function useBulkUpdateWorkItems() {
       }
 
       addNotification({
-        message: `Failed to update work items: ${err.message}`,
+        message: `Failed to update work items: ${formatErrorMessage(err)}`,
         severity: 'error',
       });
     },
@@ -319,7 +341,7 @@ export function useCreateWorkUpdate() {
 
     onError: (err) => {
       addNotification({
-        message: `Failed to add update: ${err.message}`,
+        message: `Failed to add update: ${formatErrorMessage(err)}`,
         severity: 'error',
       });
     },
@@ -398,7 +420,7 @@ export function useAcceptAiSuggestedUpdate() {
 
     onError: (err) => {
       addNotification({
-        message: `Failed to accept AI suggestion: ${err.message}`,
+        message: `Failed to accept AI suggestion: ${formatErrorMessage(err)}`,
         severity: 'error',
       });
     },
@@ -453,7 +475,7 @@ export function useAddLineComment() {
 
     onError: (err) => {
       addNotification({
-        message: `Failed to add comment: ${err.message}`,
+        message: `Failed to add comment: ${formatErrorMessage(err)}`,
         severity: 'error',
       });
     },
@@ -494,7 +516,7 @@ export function useResolveLineComment() {
 
     onError: (err) => {
       addNotification({
-        message: `Failed to resolve comment: ${err.message}`,
+        message: `Failed to resolve comment: ${formatErrorMessage(err)}`,
         severity: 'error',
       });
     },

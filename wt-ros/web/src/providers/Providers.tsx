@@ -4,12 +4,6 @@ import { ReactNode, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
-import { LicenseInfo } from '@mui/x-data-grid-premium';
-
-// Configure MUI X Premium license (replace with your license key in production)
-if (process.env.NEXT_PUBLIC_MUI_X_LICENSE_KEY) {
-  LicenseInfo.setLicenseKey(process.env.NEXT_PUBLIC_MUI_X_LICENSE_KEY);
-}
 
 // Create MUI theme with WT-ROS design system
 const theme = createTheme({

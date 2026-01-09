@@ -18,7 +18,6 @@ import {
   Int,
   registerEnumType,
 } from 'type-graphql';
-import { Service } from 'typedi';
 import DataLoader from 'dataloader';
 
 import { WorkItem } from '../entities/WorkItem.entity';
@@ -27,8 +26,9 @@ import { Team } from '../entities/Team.entity';
 import { Group } from '../entities/Group.entity';
 import { WorkUpdate } from '../entities/WorkUpdate.entity';
 import { Artifact } from '../entities/Artifact.entity';
-import { WorkItemRepository } from '../repositories/WorkItemRepository';
+import { AppDataSource } from '../config/data-source';
 import { Priority, WorkStatus, HealthStatus } from '@wt-ros/common';
+import { Brackets } from 'typeorm';
 
 // Register enums with TypeGraphQL
 registerEnumType(Priority, { name: 'Priority' });
@@ -199,16 +199,27 @@ export interface GraphQLContext {
     set: (key: string, value: string, options?: { EX?: number }) => Promise<void>;
     del: (key: string) => Promise<void>;
   };
+  req?: unknown;
+  res?: unknown;
 }
 
 // ============================================
 // RESOLVER
 // ============================================
 
-@Service()
 @Resolver(() => WorkItem)
 export class WorkItemResolver {
-  constructor(private readonly workItemRepository: WorkItemRepository) {}
+  private get repository() {
+    return AppDataSource.getRepository(WorkItem);
+  }
+
+  private get updateRepository() {
+    return AppDataSource.getRepository(WorkUpdate);
+  }
+
+  private get artifactRepository() {
+    return AppDataSource.getRepository(Artifact);
+  }
 
   // ----------------------------------------
   // QUERIES
@@ -229,7 +240,7 @@ export class WorkItemResolver {
       return JSON.parse(cached);
     }
 
-    const workItem = await this.workItemRepository.findById(id);
+    const workItem = await this.repository.findOne({ where: { id } });
 
     if (workItem) {
       // Cache for 30 seconds
@@ -263,16 +274,123 @@ export class WorkItemResolver {
       }
     }
 
-    // Execute optimized query
-    const { items, totalCount, hasNextPage } = await this.workItemRepository.findWithFilters({
-      filters: filters ?? {},
-      first,
-      after,
-      sort: sort ?? { field: 'priority', direction: 'ASC' },
-    });
+    // Build query
+    let query = this.repository.createQueryBuilder('workItem');
 
-    // Build connection response
-    const edges: WorkItemEdge[] = items.map((item) => ({
+    // Apply filters
+    if (filters) {
+      if (filters.groupIds?.length) {
+        query = query.andWhere('workItem.groupId IN (:...groupIds)', {
+          groupIds: filters.groupIds,
+        });
+      }
+
+      if (filters.teamIds?.length) {
+        query = query.andWhere('workItem.teamId IN (:...teamIds)', {
+          teamIds: filters.teamIds,
+        });
+      }
+
+      if (filters.driIds?.length) {
+        query = query.andWhere('workItem.driId IN (:...driIds)', {
+          driIds: filters.driIds,
+        });
+      }
+
+      if (filters.priorities?.length) {
+        query = query.andWhere('workItem.priority IN (:...priorities)', {
+          priorities: filters.priorities,
+        });
+      }
+
+      if (filters.statuses?.length) {
+        query = query.andWhere('workItem.status IN (:...statuses)', {
+          statuses: filters.statuses,
+        });
+      }
+
+      if (filters.health?.length) {
+        query = query.andWhere('workItem.health IN (:...health)', {
+          health: filters.health,
+        });
+      }
+
+      if (filters.needsHelp !== undefined) {
+        query = query.andWhere('workItem.needsHelp = :needsHelp', {
+          needsHelp: filters.needsHelp,
+        });
+      }
+
+      if (filters.atRisk !== undefined) {
+        query = query.andWhere('workItem.atRisk = :atRisk', {
+          atRisk: filters.atRisk,
+        });
+      }
+
+      if (filters.stale !== undefined) {
+        query = query.andWhere('workItem.stale = :stale', {
+          stale: filters.stale,
+        });
+      }
+
+      if (filters.searchQuery) {
+        const searchTerm = `%${filters.searchQuery}%`;
+        query = query.andWhere(
+          new Brackets((qb) => {
+            qb.where('workItem.title ILIKE :searchTerm', { searchTerm })
+              .orWhere('workItem.description ILIKE :searchTerm', { searchTerm });
+          })
+        );
+      }
+    }
+
+    // Apply cursor-based pagination
+    if (after) {
+      try {
+        const decoded = Buffer.from(after, 'base64').toString('utf-8');
+        const cursorMatch = decoded.match(/cursor:(.+)/);
+        if (cursorMatch) {
+          const cursorId = cursorMatch[1];
+          // Simple cursor: items after the cursor ID
+          query = query.andWhere('workItem.id > :cursorId', { cursorId });
+        }
+      } catch {
+        // Invalid cursor, ignore
+      }
+    }
+
+    // Apply sorting
+    const sortField = sort?.field || 'priority';
+    const sortDirection = sort?.direction || 'ASC';
+
+    // Map sort field to proper column
+    const sortFieldMap: Record<string, string> = {
+      priority: 'workItem.priority',
+      createdAt: 'workItem.createdAt',
+      updatedAt: 'workItem.updatedAt',
+      targetDate: 'workItem.targetDate',
+      title: 'workItem.title',
+    };
+
+    const actualSortField = sortFieldMap[sortField] || 'workItem.priority';
+    query = query.orderBy(actualSortField, sortDirection);
+    query = query.addOrderBy('workItem.id', 'ASC'); // Secondary sort for stability
+
+    // Get total count (without pagination)
+    const totalCount = await query.clone().getCount();
+
+    // Apply limit (fetch one extra to determine hasNextPage)
+    query = query.take(first + 1);
+
+    // Execute query
+    const items = await query.getMany();
+
+    // Determine pagination info
+    const hasNextPage = items.length > first;
+    const resultItems = hasNextPage ? items.slice(0, first) : items;
+
+    // Build edges with cursors
+    const edges: WorkItemEdge[] = resultItems.map((item) => ({
       node: item,
       cursor: Buffer.from(`cursor:${item.id}`).toString('base64'),
     }));
@@ -299,9 +417,26 @@ export class WorkItemResolver {
    */
   @Query(() => [WorkItem])
   async execBreakfastBoard(
-    @Arg('week', { nullable: true }) week?: string
+    @Arg('week', { nullable: true }) _week?: string
   ): Promise<WorkItem[]> {
-    return this.workItemRepository.findForExecBreakfast(week);
+    return this.repository
+      .createQueryBuilder('workItem')
+      .where('workItem.priority IN (:...priorities)', {
+        priorities: [Priority.P0, Priority.P1],
+      })
+      .andWhere(
+        new Brackets((qb) => {
+          qb.where('workItem.atRisk = true')
+            .orWhere('workItem.needsHelp = true')
+            .orWhere('workItem.health = :redHealth', { redHealth: HealthStatus.RED });
+        })
+      )
+      .andWhere('workItem.status NOT IN (:...completedStatuses)', {
+        completedStatuses: [WorkStatus.COMPLETE, WorkStatus.CANCELLED],
+      })
+      .orderBy('workItem.priority', 'ASC')
+      .addOrderBy('workItem.targetDate', 'ASC')
+      .getMany();
   }
 
   /**
@@ -310,9 +445,17 @@ export class WorkItemResolver {
   @Query(() => [WorkItem])
   async groupBoard(
     @Arg('groupId', () => ID) groupId: string,
-    @Arg('week', { nullable: true }) week?: string
+    @Arg('week', { nullable: true }) _week?: string
   ): Promise<WorkItem[]> {
-    return this.workItemRepository.findByGroup(groupId, week);
+    return this.repository
+      .createQueryBuilder('workItem')
+      .where('workItem.groupId = :groupId', { groupId })
+      .andWhere('workItem.status NOT IN (:...completedStatuses)', {
+        completedStatuses: [WorkStatus.COMPLETE, WorkStatus.CANCELLED],
+      })
+      .orderBy('workItem.priority', 'ASC')
+      .addOrderBy('workItem.targetDate', 'ASC')
+      .getMany();
   }
 
   /**
@@ -322,7 +465,22 @@ export class WorkItemResolver {
   async staleWorkItems(
     @Arg('threshold', () => Int, { defaultValue: 7 }) threshold: number
   ): Promise<WorkItem[]> {
-    return this.workItemRepository.findStale(threshold);
+    const thresholdDate = new Date();
+    thresholdDate.setDate(thresholdDate.getDate() - threshold);
+
+    return this.repository
+      .createQueryBuilder('workItem')
+      .where(
+        new Brackets((qb) => {
+          qb.where('workItem.lastActivityAt < :threshold', { threshold: thresholdDate })
+            .orWhere('workItem.lastActivityAt IS NULL');
+        })
+      )
+      .andWhere('workItem.status NOT IN (:...completedStatuses)', {
+        completedStatuses: [WorkStatus.COMPLETE, WorkStatus.CANCELLED],
+      })
+      .orderBy('workItem.lastActivityAt', 'ASC', 'NULLS FIRST')
+      .getMany();
   }
 
   /**
@@ -332,7 +490,14 @@ export class WorkItemResolver {
   async driftingWorkItems(
     @Arg('threshold', { defaultValue: 0.7 }) threshold: number
   ): Promise<WorkItem[]> {
-    return this.workItemRepository.findDrifting(threshold);
+    return this.repository
+      .createQueryBuilder('workItem')
+      .where('workItem.driftScore >= :threshold', { threshold })
+      .andWhere('workItem.status NOT IN (:...completedStatuses)', {
+        completedStatuses: [WorkStatus.COMPLETE, WorkStatus.CANCELLED],
+      })
+      .orderBy('workItem.driftScore', 'DESC')
+      .getMany();
   }
 
   // ----------------------------------------
@@ -347,7 +512,7 @@ export class WorkItemResolver {
     @Arg('input') input: CreateWorkItemInput,
     @Ctx() ctx: GraphQLContext
   ): Promise<WorkItem> {
-    const workItem = await this.workItemRepository.create({
+    const workItem = this.repository.create({
       ...input,
       originalTargetDate: input.targetDate,
       status: WorkStatus.NOT_STARTED,
@@ -357,10 +522,12 @@ export class WorkItemResolver {
       stale: false,
     });
 
+    const saved = await this.repository.save(workItem);
+
     // Invalidate list caches
     await this.invalidateListCaches(ctx);
 
-    return workItem;
+    return saved;
   }
 
   /**
@@ -372,7 +539,12 @@ export class WorkItemResolver {
     @Arg('input') input: UpdateWorkItemInput,
     @Ctx() ctx: GraphQLContext
   ): Promise<WorkItem> {
-    const workItem = await this.workItemRepository.update(id, input);
+    await this.repository.update(id, input);
+    const workItem = await this.repository.findOne({ where: { id } });
+
+    if (!workItem) {
+      throw new Error('Work item not found');
+    }
 
     // Invalidate caches
     await ctx.redis.del(`workItem:${id}`);
@@ -389,13 +561,13 @@ export class WorkItemResolver {
     @Arg('id', () => ID) id: string,
     @Ctx() ctx: GraphQLContext
   ): Promise<boolean> {
-    await this.workItemRepository.delete(id);
+    const result = await this.repository.delete(id);
 
     // Invalidate caches
     await ctx.redis.del(`workItem:${id}`);
     await this.invalidateListCaches(ctx);
 
-    return true;
+    return (result.affected ?? 0) > 0;
   }
 
   /**
@@ -403,12 +575,11 @@ export class WorkItemResolver {
    */
   @Mutation(() => WorkItem)
   async triggerSynthesis(
-    @Arg('workItemId', () => ID) workItemId: string,
-    @Ctx() ctx: GraphQLContext
+    @Arg('workItemId', () => ID) workItemId: string
   ): Promise<WorkItem> {
     // This would trigger the sync engine to generate an AI update
     // For now, we just return the work item
-    const workItem = await this.workItemRepository.findById(workItemId);
+    const workItem = await this.repository.findOne({ where: { id: workItemId } });
     if (!workItem) {
       throw new Error('Work item not found');
     }
@@ -425,13 +596,19 @@ export class WorkItemResolver {
   @Mutation(() => WorkItem)
   async flagAsAtRisk(
     @Arg('workItemId', () => ID) workItemId: string,
-    @Arg('reason') reason: string,
+    @Arg('reason') _reason: string,
     @Ctx() ctx: GraphQLContext
   ): Promise<WorkItem> {
-    const workItem = await this.workItemRepository.update(workItemId, {
+    await this.repository.update(workItemId, {
       atRisk: true,
       health: HealthStatus.RED,
     });
+
+    const workItem = await this.repository.findOne({ where: { id: workItemId } });
+
+    if (!workItem) {
+      throw new Error('Work item not found');
+    }
 
     // TODO: Create a system update with the reason
     // await workUpdateRepository.create({
@@ -502,7 +679,10 @@ export class WorkItemResolver {
    */
   @FieldResolver(() => [WorkItem])
   async childWorkItems(@Root() workItem: WorkItem): Promise<WorkItem[]> {
-    return this.workItemRepository.findByParent(workItem.id);
+    return this.repository.find({
+      where: { parentWorkItemId: workItem.id },
+      order: { priority: 'ASC', createdAt: 'ASC' },
+    });
   }
 
   /**
@@ -510,15 +690,20 @@ export class WorkItemResolver {
    */
   @FieldResolver(() => [WorkUpdate])
   async updates(@Root() workItem: WorkItem): Promise<WorkUpdate[]> {
-    return this.workItemRepository.findUpdates(workItem.id);
+    return this.updateRepository.find({
+      where: { workItemId: workItem.id },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   /**
    * Resolve artifacts
    */
   @FieldResolver(() => [Artifact])
-  async artifacts(@Root() workItem: WorkItem): Promise<Artifact[]> {
-    return this.workItemRepository.findArtifacts(workItem.id);
+  async artifactEntities(@Root() workItem: WorkItem): Promise<Artifact[]> {
+    return this.artifactRepository.find({
+      where: { workItemId: workItem.id },
+    });
   }
 
   // ----------------------------------------
@@ -528,7 +713,7 @@ export class WorkItemResolver {
   /**
    * Invalidate all list-related caches
    */
-  private async invalidateListCaches(ctx: GraphQLContext): Promise<void> {
+  private async invalidateListCaches(_ctx: GraphQLContext): Promise<void> {
     // In production, use Redis SCAN to find and delete matching keys
     // For now, we rely on TTL expiration
   }

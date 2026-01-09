@@ -13,14 +13,12 @@ import {
   InputType,
   Field,
 } from 'type-graphql';
-import { Service } from 'typedi';
 
 import { WorkUpdate } from '../entities/WorkUpdate.entity';
 import { WorkItem } from '../entities/WorkItem.entity';
 import { User } from '../entities/User.entity';
 import { LineComment } from '../entities/LineComment.entity';
-import { WorkUpdateRepository } from '../repositories/WorkUpdateRepository';
-import { WorkItemRepository } from '../repositories/WorkItemRepository';
+import { AppDataSource } from '../config/data-source';
 import { GraphQLContext } from './WorkItemResolver';
 
 // ============================================
@@ -40,16 +38,82 @@ export class CreateWorkUpdateInput {
 }
 
 // ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Get current ISO week string in format "YYYY-WXX"
+ */
+function getCurrentWeek(): string {
+  const now = new Date();
+  const oneJan = new Date(now.getFullYear(), 0, 1);
+  const numberOfDays = Math.floor((now.getTime() - oneJan.getTime()) / (24 * 60 * 60 * 1000));
+  const weekNumber = Math.ceil((numberOfDays + oneJan.getDay() + 1) / 7);
+  return `${now.getFullYear()}-W${String(weekNumber).padStart(2, '0')}`;
+}
+
+// ============================================
 // RESOLVER
 // ============================================
 
-@Service()
 @Resolver(() => WorkUpdate)
 export class WorkUpdateResolver {
-  constructor(
-    private readonly workUpdateRepository: WorkUpdateRepository,
-    private readonly workItemRepository: WorkItemRepository
-  ) {}
+  private get repository() {
+    return AppDataSource.getRepository(WorkUpdate);
+  }
+
+  private get workItemRepository() {
+    return AppDataSource.getRepository(WorkItem);
+  }
+
+  private get lineCommentRepository() {
+    return AppDataSource.getRepository(LineComment);
+  }
+
+  // ----------------------------------------
+  // QUERIES
+  // ----------------------------------------
+
+  /**
+   * Get a single work update by ID
+   */
+  @Query(() => WorkUpdate, { nullable: true })
+  async workUpdate(
+    @Arg('id', () => ID) id: string
+  ): Promise<WorkUpdate | null> {
+    return this.repository.findOne({ where: { id } });
+  }
+
+  /**
+   * Get all updates for a work item
+   */
+  @Query(() => [WorkUpdate])
+  async workUpdates(
+    @Arg('workItemId', () => ID) workItemId: string
+  ): Promise<WorkUpdate[]> {
+    return this.repository.find({
+      where: { workItemId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Get updates for a specific week
+   */
+  @Query(() => [WorkUpdate])
+  async weeklyUpdates(
+    @Arg('week', { nullable: true }) week?: string
+  ): Promise<WorkUpdate[]> {
+    const targetWeek = week || getCurrentWeek();
+    return this.repository.find({
+      where: { week: targetWeek },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  // ----------------------------------------
+  // MUTATIONS
+  // ----------------------------------------
 
   /**
    * Create a new work update
@@ -60,15 +124,15 @@ export class WorkUpdateResolver {
     @Arg('input') input: CreateWorkUpdateInput,
     @Ctx() ctx: GraphQLContext
   ): Promise<WorkUpdate> {
-    // Get current week in ISO format (YYYY-Www)
-    const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const weekNumber = Math.ceil(
-      ((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7
-    );
-    const week = `${now.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
+    // Verify work item exists
+    const workItem = await this.workItemRepository.findOne({ where: { id: workItemId } });
+    if (!workItem) {
+      throw new Error('Work item not found');
+    }
 
-    const workUpdate = await this.workUpdateRepository.create({
+    const week = getCurrentWeek();
+
+    const workUpdate = this.repository.create({
       workItemId,
       content: input.content,
       authorId: ctx.userId,
@@ -77,12 +141,15 @@ export class WorkUpdateResolver {
       aiConfidence: input.aiConfidence ?? null,
     });
 
+    const saved = await this.repository.save(workUpdate);
+
     // Update the work item's lastActivityAt
     await this.workItemRepository.update(workItemId, {
-      // lastActivityAt will be set by the repository
+      lastActivityAt: new Date(),
+      stale: false,
     });
 
-    return workUpdate;
+    return saved;
   }
 
   /**
@@ -93,7 +160,7 @@ export class WorkUpdateResolver {
     @Arg('workItemId', () => ID) workItemId: string,
     @Ctx() ctx: GraphQLContext
   ): Promise<WorkUpdate> {
-    const workItem = await this.workItemRepository.findById(workItemId);
+    const workItem = await this.workItemRepository.findOne({ where: { id: workItemId } });
     if (!workItem) {
       throw new Error('Work item not found');
     }
@@ -102,15 +169,9 @@ export class WorkUpdateResolver {
       throw new Error('No AI suggestion available');
     }
 
-    // Create the update from the AI suggestion
-    const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const weekNumber = Math.ceil(
-      ((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7
-    );
-    const week = `${now.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
+    const week = getCurrentWeek();
 
-    const workUpdate = await this.workUpdateRepository.create({
+    const workUpdate = this.repository.create({
       workItemId,
       content: workItem.aiSuggestedUpdate,
       authorId: ctx.userId,
@@ -119,12 +180,43 @@ export class WorkUpdateResolver {
       aiConfidence: 0.85, // Default confidence for accepted suggestions
     });
 
-    // Clear the AI suggestion
+    const saved = await this.repository.save(workUpdate);
+
+    // Clear the AI suggestion and update last activity
     await this.workItemRepository.update(workItemId, {
-      // Clear aiSuggestedUpdate - handled by repository
+      aiSuggestedUpdate: null,
+      lastActivityAt: new Date(),
+      stale: false,
     });
 
-    return workUpdate;
+    return saved;
+  }
+
+  /**
+   * Update an existing work update
+   */
+  @Mutation(() => WorkUpdate)
+  async updateWorkUpdate(
+    @Arg('id', () => ID) id: string,
+    @Arg('content') content: string
+  ): Promise<WorkUpdate> {
+    await this.repository.update(id, { content });
+    const updated = await this.repository.findOne({ where: { id } });
+    if (!updated) {
+      throw new Error('Work update not found');
+    }
+    return updated;
+  }
+
+  /**
+   * Delete a work update
+   */
+  @Mutation(() => Boolean)
+  async deleteWorkUpdate(
+    @Arg('id', () => ID) id: string
+  ): Promise<boolean> {
+    const result = await this.repository.delete(id);
+    return (result.affected ?? 0) > 0;
   }
 
   // ----------------------------------------
@@ -149,6 +241,9 @@ export class WorkUpdateResolver {
 
   @FieldResolver(() => [LineComment])
   async lineComments(@Root() workUpdate: WorkUpdate): Promise<LineComment[]> {
-    return this.workUpdateRepository.findLineComments(workUpdate.id);
+    return this.lineCommentRepository.find({
+      where: { updateId: workUpdate.id },
+      order: { startOffset: 'ASC', createdAt: 'ASC' },
+    });
   }
 }
