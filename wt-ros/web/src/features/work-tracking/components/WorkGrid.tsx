@@ -12,7 +12,7 @@
  */
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  DataGridPremium,
+  DataGrid,
   GridColDef,
   GridRowParams,
   GridCellParams,
@@ -23,7 +23,7 @@ import {
   GridToolbar,
   GridActionsCellItem,
   GRID_CHECKBOX_SELECTION_COL_DEF,
-} from '@mui/x-data-grid-premium';
+} from '@mui/x-data-grid';
 import { Box, Chip, IconButton, Tooltip, Typography } from '@mui/material';
 import {
   Flag as FlagIcon,
@@ -405,13 +405,6 @@ export function WorkGrid({ className }: WorkGridProps) {
     [updateWorkItem]
   );
 
-  // Load more on scroll
-  const handleRowsScrollEnd = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
   // Columns
   const columns = useMemo(
     () => createColumns(handleEdit, handleOpenDetail),
@@ -465,7 +458,7 @@ export function WorkGrid({ className }: WorkGridProps) {
         },
       }}
     >
-      <DataGridPremium
+      <DataGrid
         apiRef={apiRef}
         rows={displayData}
         columns={columns}
@@ -479,15 +472,21 @@ export function WorkGrid({ className }: WorkGridProps) {
         onRowClick={handleRowClick}
         onRowDoubleClick={handleRowDoubleClick}
         processRowUpdate={handleProcessRowUpdate}
-        onRowsScrollEnd={handleRowsScrollEnd}
         // Performance
         rowBuffer={10}
         columnBuffer={5}
-        // Styling
+        // Styling - fixed row height for alignment
+        rowHeight={52}
         getRowClassName={getRowClassName}
-        density="compact"
+        density="standard"
         // Features
-        pagination={false}
+        pageSizeOptions={[25, 50, 100]}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 50 } },
+          sorting: {
+            sortModel: [{ field: 'priority', sort: 'asc' }],
+          },
+        }}
         slots={{
           toolbar: GridToolbar,
         }}
@@ -499,12 +498,6 @@ export function WorkGrid({ className }: WorkGridProps) {
         }}
         // Keyboard
         disableColumnMenu={false}
-        // Initial state
-        initialState={{
-          sorting: {
-            sortModel: [{ field: 'priority', sort: 'asc' }],
-          },
-        }}
       />
     </Box>
   );
