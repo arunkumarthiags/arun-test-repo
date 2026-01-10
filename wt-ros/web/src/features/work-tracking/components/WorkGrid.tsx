@@ -9,10 +9,11 @@
  * - Health-based row styling
  * - Inline editing with optimistic updates
  * - Selection and bulk actions
+ * - Error boundary and loading states
  */
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  DataGridPremium,
+  DataGrid,
   GridColDef,
   GridRowParams,
   GridCellParams,
@@ -23,8 +24,16 @@ import {
   GridToolbar,
   GridActionsCellItem,
   GRID_CHECKBOX_SELECTION_COL_DEF,
-} from '@mui/x-data-grid-premium';
-import { Box, Chip, IconButton, Tooltip, Typography } from '@mui/material';
+} from '@mui/x-data-grid';
+import {
+  Box,
+  Chip,
+  IconButton,
+  Tooltip,
+  Typography,
+  Alert,
+  CircularProgress,
+} from '@mui/material';
 import {
   Flag as FlagIcon,
   Warning as WarningIcon,
@@ -32,6 +41,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Edit as EditIcon,
   OpenInNew as OpenInNewIcon,
+  CloudOff as CloudOffIcon,
 } from '@mui/icons-material';
 import { useAtom, useSetAtom } from 'jotai';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
@@ -57,25 +67,25 @@ import { activeFiltersAtom } from '../stores/filterStore';
 // ============================================
 
 const PRIORITY_COLORS: Record<Priority, string> = {
-  P0: '#dc2626', // red-600
-  P1: '#ea580c', // orange-600
-  P2: '#2563eb', // blue-600
-  P3: '#6b7280', // gray-500
+  [Priority.P0]: '#dc2626', // red-600
+  [Priority.P1]: '#ea580c', // orange-600
+  [Priority.P2]: '#2563eb', // blue-600
+  [Priority.P3]: '#6b7280', // gray-500
 };
 
 const STATUS_COLORS: Record<WorkStatus, string> = {
-  NOT_STARTED: '#9ca3af',
-  IN_PROGRESS: '#3b82f6',
-  BLOCKED: '#ef4444',
-  COMPLETE: '#22c55e',
-  CANCELLED: '#6b7280',
+  [WorkStatus.NOT_STARTED]: '#9ca3af',
+  [WorkStatus.IN_PROGRESS]: '#3b82f6',
+  [WorkStatus.BLOCKED]: '#ef4444',
+  [WorkStatus.COMPLETE]: '#22c55e',
+  [WorkStatus.CANCELLED]: '#6b7280',
 };
 
 const HEALTH_COLORS: Record<HealthStatus, string> = {
-  GREEN: '#22c55e',
-  YELLOW: '#eab308',
-  RED: '#ef4444',
-  UNKNOWN: '#9ca3af',
+  [HealthStatus.GREEN]: '#22c55e',
+  [HealthStatus.YELLOW]: '#eab308',
+  [HealthStatus.RED]: '#ef4444',
+  [HealthStatus.UNKNOWN]: '#9ca3af',
 };
 
 // ============================================
@@ -94,12 +104,12 @@ const createColumns = (
     field: 'priority',
     headerName: 'P',
     width: 60,
-    renderCell: (params: GridCellParams<IWorkItem>) => (
+    renderCell: (params: GridCellParams<IWorkItem, Priority>) => (
       <Chip
-        label={params.value}
+        label={params.value as string}
         size="small"
         sx={{
-          backgroundColor: PRIORITY_COLORS[params.value as Priority],
+          backgroundColor: params.value ? PRIORITY_COLORS[params.value] : '#9ca3af',
           color: 'white',
           fontWeight: 600,
           fontSize: '0.75rem',
@@ -112,15 +122,15 @@ const createColumns = (
     field: 'health',
     headerName: 'Health',
     width: 80,
-    renderCell: (params: GridCellParams<IWorkItem>) => {
-      const health = params.value as HealthStatus;
+    renderCell: (params: GridCellParams<IWorkItem, HealthStatus>) => {
+      const health = params.value;
       return (
         <Box
           sx={{
             width: 12,
             height: 12,
             borderRadius: '50%',
-            backgroundColor: HEALTH_COLORS[health],
+            backgroundColor: health ? HEALTH_COLORS[health] : '#9ca3af',
           }}
         />
       );
@@ -131,7 +141,7 @@ const createColumns = (
     headerName: 'Work Item',
     flex: 1,
     minWidth: 300,
-    renderCell: (params: GridCellParams<IWorkItem>) => {
+    renderCell: (params: GridCellParams<IWorkItem, string>) => {
       const row = params.row;
       return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -144,7 +154,7 @@ const createColumns = (
               whiteSpace: 'nowrap',
             }}
           >
-            {params.value}
+            {params.value as string}
           </Typography>
           {row.needsHelp && (
             <Tooltip title="Needs Help">
@@ -169,23 +179,23 @@ const createColumns = (
     field: 'status',
     headerName: 'Status',
     width: 130,
-    renderCell: (params: GridCellParams<IWorkItem>) => {
-      const status = params.value as WorkStatus;
+    renderCell: (params: GridCellParams<IWorkItem, WorkStatus>) => {
+      const status = params.value;
       const statusLabels: Record<WorkStatus, string> = {
-        NOT_STARTED: 'Not Started',
-        IN_PROGRESS: 'In Progress',
-        BLOCKED: 'Blocked',
-        COMPLETE: 'Complete',
-        CANCELLED: 'Cancelled',
+        [WorkStatus.NOT_STARTED]: 'Not Started',
+        [WorkStatus.IN_PROGRESS]: 'In Progress',
+        [WorkStatus.BLOCKED]: 'Blocked',
+        [WorkStatus.COMPLETE]: 'Complete',
+        [WorkStatus.CANCELLED]: 'Cancelled',
       };
       return (
         <Chip
-          label={statusLabels[status]}
+          label={status ? statusLabels[status] : 'Unknown'}
           size="small"
           variant="outlined"
           sx={{
-            borderColor: STATUS_COLORS[status],
-            color: STATUS_COLORS[status],
+            borderColor: status ? STATUS_COLORS[status] : '#9ca3af',
+            color: status ? STATUS_COLORS[status] : '#9ca3af',
             fontSize: '0.75rem',
           }}
         />
@@ -196,11 +206,11 @@ const createColumns = (
     field: 'targetDate',
     headerName: 'Target Date',
     width: 120,
-    renderCell: (params: GridCellParams<IWorkItem>) => {
+    renderCell: (params: GridCellParams<IWorkItem, Date | null>) => {
       if (!params.value) return <Typography variant="body2">-</Typography>;
 
-      const date = new Date(params.value as string);
-      const isOverdue = isPast(date) && params.row.status !== 'COMPLETE';
+      const date = new Date(params.value);
+      const isOverdue = isPast(date) && params.row.status !== WorkStatus.COMPLETE;
 
       return (
         <Typography
@@ -219,10 +229,10 @@ const createColumns = (
     field: 'lastActivityAt',
     headerName: 'Last Activity',
     width: 120,
-    renderCell: (params: GridCellParams<IWorkItem>) => {
+    renderCell: (params: GridCellParams<IWorkItem, Date | null>) => {
       if (!params.value) return <Typography variant="body2">-</Typography>;
 
-      const date = new Date(params.value as string);
+      const date = new Date(params.value);
       return (
         <Typography variant="body2" sx={{ color: '#6b7280' }}>
           {formatDistanceToNow(date, { addSuffix: true })}
@@ -234,8 +244,8 @@ const createColumns = (
     field: 'driftScore',
     headerName: 'Drift',
     width: 80,
-    renderCell: (params: GridCellParams<IWorkItem>) => {
-      const score = params.value as number | null;
+    renderCell: (params: GridCellParams<IWorkItem, number | null>) => {
+      const score = params.value;
       if (score === null || score === undefined) return null;
 
       const color =
@@ -268,7 +278,7 @@ const createColumns = (
     field: 'aiSuggestedUpdate',
     headerName: 'AI',
     width: 60,
-    renderCell: (params: GridCellParams<IWorkItem>) => {
+    renderCell: (params: GridCellParams<IWorkItem, string | null>) => {
       if (!params.value) return null;
       return (
         <Tooltip title="AI update suggestion available">
@@ -313,9 +323,15 @@ const createColumns = (
 interface WorkGridProps {
   /** Optional className for styling */
   className?: string;
+  /** Override work items data (optional - will use hook if not provided) */
+  workItems?: IWorkItem[];
+  /** Loading state override */
+  loading?: boolean;
+  /** Callback to load more items */
+  onLoadMore?: () => void;
 }
 
-export function WorkGrid({ className }: WorkGridProps) {
+export function WorkGrid({ className, workItems: propWorkItems, loading: propLoading, onLoadMore }: WorkGridProps) {
   const apiRef = useGridApiRef();
 
   // State
@@ -324,21 +340,27 @@ export function WorkGrid({ className }: WorkGridProps) {
   const setDetailPanelWorkItemId = useSetAtom(detailPanelWorkItemIdAtom);
   const [activeFilters] = useAtom(activeFiltersAtom);
 
-  // Data fetching
+  // Data fetching (only if not provided via props)
   const {
-    workItems,
-    isLoading,
+    workItems: hookWorkItems,
+    isLoading: hookLoading,
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
     refetch,
+    isUsingMockData,
+    error,
   } = useWorkItems({
     filters: activeFilters,
-    enabled: true,
+    enabled: !propWorkItems, // Only fetch if not provided via props
   });
 
-  // Use mock data for development
-  const mockData = useMemo(() => generateMockWorkItems(100), []);
+  // Use provided data or fetched data
+  const workItems = propWorkItems ?? hookWorkItems;
+  const isLoading = propLoading ?? hookLoading;
+
+  // Generate mock data as fallback for development
+  const mockData = useMemo(() => generateMockWorkItems(100, 0), []);
   const displayData = workItems.length > 0 ? workItems : mockData;
 
   // Mutations
@@ -351,7 +373,7 @@ export function WorkGrid({ className }: WorkGridProps) {
     rowIds,
     onFocusRow: (rowId) => {
       apiRef.current?.scrollToIndexes({
-        rowIndex: rowIds.indexOf(rowId),
+        rowIndex: rowIds.indexOf(rowId as string),
       });
     },
     onRefresh: () => refetch(),
@@ -397,20 +419,13 @@ export function WorkGrid({ className }: WorkGridProps) {
           priority: newRow.priority,
           status: newRow.status,
           health: newRow.health,
-          targetDate: newRow.targetDate,
+          targetDate: newRow.targetDate ?? undefined,
         },
       });
       return newRow;
     },
     [updateWorkItem]
   );
-
-  // Load more on scroll
-  const handleRowsScrollEnd = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Columns
   const columns = useMemo(
@@ -422,9 +437,9 @@ export function WorkGrid({ className }: WorkGridProps) {
   const getRowClassName = useCallback((params: GridRowParams<IWorkItem>) => {
     const classes: string[] = [];
 
-    if (params.row.health === 'RED') {
+    if (params.row.health === HealthStatus.RED) {
       classes.push('row-health-red');
-    } else if (params.row.health === 'YELLOW') {
+    } else if (params.row.health === HealthStatus.YELLOW) {
       classes.push('row-health-yellow');
     }
 
@@ -445,67 +460,107 @@ export function WorkGrid({ className }: WorkGridProps) {
       sx={{
         height: '100%',
         width: '100%',
-        '& .row-health-red': {
-          backgroundColor: 'rgba(239, 68, 68, 0.05)',
-        },
-        '& .row-health-yellow': {
-          backgroundColor: 'rgba(234, 179, 8, 0.05)',
-        },
-        '& .row-at-risk': {
-          borderLeft: '3px solid #ef4444',
-        },
-        '& .row-stale': {
-          opacity: 0.7,
-        },
-        '& .MuiDataGrid-row:hover': {
-          backgroundColor: 'rgba(59, 130, 246, 0.04)',
-        },
-        '& .MuiDataGrid-row.Mui-selected': {
-          backgroundColor: 'rgba(59, 130, 246, 0.08)',
-        },
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      <DataGridPremium
-        apiRef={apiRef}
-        rows={displayData}
-        columns={columns}
-        loading={isLoading}
-        // Selection
-        checkboxSelection
-        disableRowSelectionOnClick
-        rowSelectionModel={selectedRowIds}
-        onRowSelectionModelChange={handleSelectionChange}
-        // Events
-        onRowClick={handleRowClick}
-        onRowDoubleClick={handleRowDoubleClick}
-        processRowUpdate={handleProcessRowUpdate}
-        onRowsScrollEnd={handleRowsScrollEnd}
-        // Performance
-        rowBuffer={10}
-        columnBuffer={5}
-        // Styling
-        getRowClassName={getRowClassName}
-        density="compact"
-        // Features
-        pagination={false}
-        slots={{
-          toolbar: GridToolbar,
-        }}
-        slotProps={{
-          toolbar: {
-            showQuickFilter: true,
-            quickFilterProps: { debounceMs: 300 },
+      {/* Offline/Mock Data Alert */}
+      {isUsingMockData && (
+        <Alert
+          severity="warning"
+          icon={<CloudOffIcon />}
+          sx={{ mb: 1 }}
+        >
+          Unable to connect to API. Showing sample data for demonstration.
+        </Alert>
+      )}
+
+      {/* Error Alert */}
+      {error && !isUsingMockData && (
+        <Alert severity="error" sx={{ mb: 1 }}>
+          {error.message}
+        </Alert>
+      )}
+
+      {/* Data Grid */}
+      <Box
+        sx={{
+          flex: 1,
+          '& .row-health-red': {
+            backgroundColor: 'rgba(239, 68, 68, 0.05)',
+          },
+          '& .row-health-yellow': {
+            backgroundColor: 'rgba(234, 179, 8, 0.05)',
+          },
+          '& .row-at-risk': {
+            borderLeft: '3px solid #ef4444',
+          },
+          '& .row-stale': {
+            opacity: 0.7,
+          },
+          '& .MuiDataGrid-row:hover': {
+            backgroundColor: 'rgba(59, 130, 246, 0.04)',
+          },
+          '& .MuiDataGrid-row.Mui-selected': {
+            backgroundColor: 'rgba(59, 130, 246, 0.08)',
           },
         }}
-        // Keyboard
-        disableColumnMenu={false}
-        // Initial state
-        initialState={{
-          sorting: {
-            sortModel: [{ field: 'priority', sort: 'asc' }],
-          },
-        }}
-      />
+      >
+        <DataGrid
+          apiRef={apiRef}
+          rows={displayData}
+          columns={columns}
+          loading={isLoading}
+          // Selection
+          checkboxSelection
+          disableRowSelectionOnClick
+          rowSelectionModel={selectedRowIds}
+          onRowSelectionModelChange={handleSelectionChange}
+          // Events
+          onRowClick={handleRowClick}
+          onRowDoubleClick={handleRowDoubleClick}
+          processRowUpdate={handleProcessRowUpdate}
+          // Styling - fixed row height for alignment
+          rowHeight={52}
+          getRowClassName={getRowClassName}
+          density="standard"
+          // Features
+          pageSizeOptions={[25, 50, 100]}
+          initialState={{
+            pagination: { paginationModel: { pageSize: 50 } },
+            sorting: {
+              sortModel: [{ field: 'priority', sort: 'asc' }],
+            },
+          }}
+          slots={{
+            toolbar: GridToolbar,
+          }}
+          slotProps={{
+            toolbar: {
+              showQuickFilter: true,
+              quickFilterProps: { debounceMs: 300 },
+            },
+          }}
+          // Keyboard
+          disableColumnMenu={false}
+        />
+      </Box>
+
+      {/* Load More Button (for infinite scroll) */}
+      {(hasNextPage || onLoadMore) && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+          <IconButton
+            onClick={onLoadMore ?? fetchNextPage}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? (
+              <CircularProgress size={24} />
+            ) : (
+              <Typography variant="body2">Load More</Typography>
+            )}
+          </IconButton>
+        </Box>
+      )}
     </Box>
   );
 }

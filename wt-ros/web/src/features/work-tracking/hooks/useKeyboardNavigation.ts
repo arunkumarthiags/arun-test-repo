@@ -15,7 +15,7 @@
  */
 import { useEffect, useCallback, useRef } from 'react';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
-import { GridRowId } from '@mui/x-data-grid-premium';
+import { GridRowId } from '@mui/x-data-grid';
 
 import {
   commandPaletteOpenAtom,

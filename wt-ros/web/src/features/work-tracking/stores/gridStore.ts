@@ -11,7 +11,7 @@
  */
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import type { GridRowId, GridSortModel, GridColumnVisibilityModel } from '@mui/x-data-grid-premium';
+import type { GridRowId, GridSortModel, GridColumnVisibilityModel } from '@mui/x-data-grid';
 import { HealthStatus, Priority, WorkStatus } from '@wt-ros/common';
 
 // ============================================

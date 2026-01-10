@@ -18,11 +18,11 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "paths": {
-      "@wt-ros/common": ["../common/src"],
+      "@wt-ros/common": ["../common/dist"],
       "@/*": ["./src/*"]
     },
     "baseUrl": "."
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "src/__tests__"]
 }

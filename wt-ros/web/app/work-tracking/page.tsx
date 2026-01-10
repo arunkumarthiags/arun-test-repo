@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Box,
   AppBar,
@@ -16,6 +16,7 @@ import {
   MenuItem,
   Tooltip,
   Badge,
+  Drawer,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -25,11 +26,14 @@ import {
   Add as AddIcon,
   ViewColumn as ViewColumnIcon,
   Download as DownloadIcon,
+  Insights as InsightsIcon,
+  ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { HealthStatus, Priority, WorkStatus } from '@wt-ros/common';
 
 import { WorkGrid } from '@/features/work-tracking/components/WorkGrid';
+import { InsightsPanel } from '@/features/work-tracking/components/InsightsPanel';
 import { useWorkItems } from '@/features/work-tracking/hooks/useWorkItems';
 import { useKeyboardNavigation } from '@/features/work-tracking/hooks/useKeyboardNavigation';
 import {
@@ -38,6 +42,7 @@ import {
   commandPaletteOpenAtom,
   quickFiltersAtom,
   activeFilterCountAtom,
+  detailPanelWorkItemIdAtom,
 } from '@/features/work-tracking/stores/gridStore';
 import {
   filtersAtom,
@@ -46,6 +51,9 @@ import {
   togglePriorityFilterAtom,
   toggleStatusFilterAtom,
 } from '@/features/work-tracking/stores/filterStore';
+
+/** Width of the insights panel drawer */
+const INSIGHTS_PANEL_WIDTH = 420;
 
 /**
  * Work Tracking Dashboard - Main page with high-density grid
@@ -67,20 +75,21 @@ export default function WorkTrackingPage() {
   const togglePriorityFilter = useSetAtom(togglePriorityFilterAtom);
   const toggleStatusFilter = useSetAtom(toggleStatusFilterAtom);
   const activeFilterCount = useAtomValue(activeFilterCountAtom);
+  const setDetailPanelWorkItemId = useSetAtom(detailPanelWorkItemIdAtom);
 
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
   const [healthAnchorEl, setHealthAnchorEl] = useState<null | HTMLElement>(null);
   const [priorityAnchorEl, setPriorityAnchorEl] = useState<null | HTMLElement>(null);
   const [statusAnchorEl, setStatusAnchorEl] = useState<null | HTMLElement>(null);
+  const [insightsPanelOpen, setInsightsPanelOpen] = useState(true);
 
   // Fetch work items with filters
   const {
-    data: workItemsData,
+    workItems,
     isLoading,
     isFetching,
     refetch,
-    fetchNextPage,
-    hasNextPage,
+    totalCount,
   } = useWorkItems({
     filters: {
       ...filters,
@@ -90,14 +99,6 @@ export default function WorkTrackingPage() {
 
   // Enable keyboard navigation
   useKeyboardNavigation();
-
-  // Flatten paginated data
-  const workItems = useMemo(() => {
-    if (!workItemsData?.pages) return [];
-    return workItemsData.pages.flatMap((page) => page.workItems.edges.map((edge) => edge.node));
-  }, [workItemsData]);
-
-  const totalCount = workItemsData?.pages[0]?.workItems.totalCount ?? 0;
 
   // Handlers
   const handleSearchChange = useCallback(
@@ -130,6 +131,17 @@ export default function WorkTrackingPage() {
   const handleStatusFilterClick = (event: React.MouseEvent<HTMLElement>) => {
     setStatusAnchorEl(event.currentTarget);
   };
+
+  const handleToggleInsightsPanel = useCallback(() => {
+    setInsightsPanelOpen((prev) => !prev);
+  }, []);
+
+  const handleAttentionItemClick = useCallback(
+    (itemId: string) => {
+      setDetailPanelWorkItemId(itemId);
+    },
+    [setDetailPanelWorkItemId]
+  );
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -281,6 +293,21 @@ export default function WorkTrackingPage() {
                 <DownloadIcon />
               </IconButton>
             </Tooltip>
+
+            <Tooltip title={insightsPanelOpen ? 'Hide AI Insights' : 'Show AI Insights'}>
+              <IconButton
+                onClick={handleToggleInsightsPanel}
+                color={insightsPanelOpen ? 'primary' : 'default'}
+                sx={{
+                  bgcolor: insightsPanelOpen ? 'primary.50' : 'transparent',
+                  '&:hover': {
+                    bgcolor: insightsPanelOpen ? 'primary.100' : 'action.hover',
+                  },
+                }}
+              >
+                <InsightsIcon />
+              </IconButton>
+            </Tooltip>
           </Stack>
         </Toolbar>
       </AppBar>
@@ -345,13 +372,83 @@ export default function WorkTrackingPage() {
         </Box>
       )}
 
-      {/* Work Grid */}
-      <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-        <WorkGrid
-          workItems={workItems}
-          loading={isLoading}
-          onLoadMore={hasNextPage ? () => fetchNextPage() : undefined}
-        />
+      {/* Main Content Area with Grid and Insights Panel */}
+      <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
+        {/* Work Grid */}
+        <Box
+          sx={{
+            flexGrow: 1,
+            overflow: 'hidden',
+            transition: 'margin-right 0.3s ease',
+            marginRight: insightsPanelOpen ? `${INSIGHTS_PANEL_WIDTH}px` : 0,
+          }}
+        >
+          <WorkGrid />
+        </Box>
+
+        {/* Insights Panel Drawer */}
+        <Drawer
+          variant="persistent"
+          anchor="right"
+          open={insightsPanelOpen}
+          sx={{
+            width: insightsPanelOpen ? INSIGHTS_PANEL_WIDTH : 0,
+            flexShrink: 0,
+            '& .MuiDrawer-paper': {
+              width: INSIGHTS_PANEL_WIDTH,
+              boxSizing: 'border-box',
+              top: 'auto',
+              height: 'calc(100vh - 64px)', // Subtract AppBar height
+              borderLeft: '1px solid',
+              borderColor: 'divider',
+            },
+          }}
+        >
+          <Box
+            sx={{
+              height: '100%',
+              overflow: 'auto',
+              bgcolor: 'grey.50',
+              p: 2,
+            }}
+          >
+            <InsightsPanel
+              defaultExpanded={true}
+              maxHeight="calc(100vh - 100px)"
+              onAttentionItemClick={handleAttentionItemClick}
+            />
+          </Box>
+        </Drawer>
+
+        {/* Collapsed Insights Toggle (shown when panel is closed) */}
+        {!insightsPanelOpen && (
+          <Box
+            sx={{
+              position: 'fixed',
+              right: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 1000,
+            }}
+          >
+            <Tooltip title="Show AI Insights" placement="left">
+              <IconButton
+                onClick={handleToggleInsightsPanel}
+                sx={{
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  borderRadius: '8px 0 0 8px',
+                  '&:hover': {
+                    bgcolor: 'primary.dark',
+                  },
+                  boxShadow: 2,
+                }}
+              >
+                <ChevronRightIcon sx={{ transform: 'rotate(180deg)' }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
       </Box>
     </Box>
   );

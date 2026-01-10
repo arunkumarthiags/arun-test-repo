@@ -17,7 +17,7 @@
     "openai": "^4.28.0",
     "node-cron": "^3.0.3",
     "uuid": "^9.0.1",
-    "@wt-ros/common": "workspace:*"
+    "@wt-ros/common": "*"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

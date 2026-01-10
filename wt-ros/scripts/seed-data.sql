@@ -1,9 +1,13 @@
 -- WT-ROS Seed Data Script
 -- Run this AFTER init-db.sql to populate the database with realistic dummy data
 -- Usage: psql -U wt_ros -d wt_ros < scripts/seed-data.sql
+-- This script is idempotent - safe to run multiple times
 
--- Clear existing data (optional - comment out if you want to add to existing data)
--- TRUNCATE work_items, work_updates, line_comments, activities CASCADE;
+-- Clear existing seed data before re-inserting
+DELETE FROM activities WHERE id LIKE 'a1000000-0000-0000-0000-%';
+DELETE FROM line_comments WHERE id LIKE 'f0000000-0000-0000-0000-%';
+DELETE FROM work_updates WHERE id LIKE 'e0000000-0000-0000-0000-%';
+DELETE FROM work_items WHERE id LIKE 'd0000000-0000-0000-0000-%';
 
 -- =====================================================
 -- WORK ITEMS - Platform Engineering Group
@@ -385,7 +389,7 @@ INSERT INTO line_comments (id, update_id, start_offset, end_offset, content, aut
 INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, content, url, metadata, occurred_at) VALUES
 -- GitHub activities
 (
-  'g0000000-0000-0000-0000-000000000001',
+  'a1000000-0000-0000-0000-000000000001',
   'd0000000-0000-0000-0000-000000000001',
   'GITHUB_PR',
   'opened',
@@ -397,7 +401,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
   NOW() - INTERVAL '2 days'
 ),
 (
-  'g0000000-0000-0000-0000-000000000002',
+  'a1000000-0000-0000-0000-000000000002',
   'd0000000-0000-0000-0000-000000000001',
   'GITHUB_PR',
   'review_approved',
@@ -409,7 +413,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
   NOW() - INTERVAL '1 day'
 ),
 (
-  'g0000000-0000-0000-0000-000000000003',
+  'a1000000-0000-0000-0000-000000000003',
   'd0000000-0000-0000-0000-000000000003',
   'GITHUB_PR',
   'opened',
@@ -423,7 +427,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
 
 -- Slack activities
 (
-  'g0000000-0000-0000-0000-000000000004',
+  'a1000000-0000-0000-0000-000000000004',
   'd0000000-0000-0000-0000-000000000005',
   'SLACK_THREAD',
   'message',
@@ -435,7 +439,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
   NOW() - INTERVAL '3 days'
 ),
 (
-  'g0000000-0000-0000-0000-000000000005',
+  'a1000000-0000-0000-0000-000000000005',
   'd0000000-0000-0000-0000-000000000002',
   'SLACK_THREAD',
   'message',
@@ -449,7 +453,7 @@ INSERT INTO activities (id, work_item_id, source, action, actor_id, actor_name, 
 
 -- Jira activities
 (
-  'g0000000-0000-0000-0000-000000000006',
+  'a1000000-0000-0000-0000-000000000006',
   'd0000000-0000-0000-0000-000000000002',
   'JIRA_TICKET',
   'status_change',

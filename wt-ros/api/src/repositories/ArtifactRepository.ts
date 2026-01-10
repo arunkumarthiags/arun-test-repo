@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { Repository, QueryDeepPartialEntity } from 'typeorm';
 import { Artifact } from '../entities/Artifact.entity';
 import { AppDataSource } from '../config/data-source';
 import { ArtifactType } from '@wt-ros/common';
@@ -84,7 +84,7 @@ export class ArtifactRepository {
    * Update an artifact
    */
   async update(id: string, data: Partial<Artifact>): Promise<Artifact | null> {
-    await this.repository.update(id, data);
+    await this.repository.update(id, data as QueryDeepPartialEntity<Artifact>);
     return this.findById(id);
   }
 

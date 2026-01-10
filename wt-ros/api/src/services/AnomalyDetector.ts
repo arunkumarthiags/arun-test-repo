@@ -314,7 +314,6 @@ export class AnomalyDetector {
         message: 'Last 3 updates are nearly identical - may indicate stalled progress',
         severity: 'medium',
         detectedAt: new Date(),
-        workItemId: '', // Will be filled by caller
       };
     }
 

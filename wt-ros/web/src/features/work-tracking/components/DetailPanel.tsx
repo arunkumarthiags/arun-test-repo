@@ -35,7 +35,7 @@ import {
 import { useAtom } from 'jotai';
 import { format } from 'date-fns';
 
-import { Priority, WorkStatus, HealthStatus, IWorkItem } from '@wt-ros/common';
+import { Priority, WorkStatus, HealthStatus, IWorkItem, ArtifactType } from '@wt-ros/common';
 import { detailPanelWorkItemIdAtom } from '../stores/gridStore';
 import {
   useUpdateWorkItem,
@@ -88,7 +88,7 @@ export function DetailPanel({ workItem: propWorkItem, width = 480 }: DetailPanel
     artifacts: [
       {
         id: 'artifact-1',
-        type: 'GITHUB_PR' as const,
+        type: ArtifactType.GITHUB_PR,
         url: 'https://github.com/org/repo/pull/123',
         title: 'PR #123: Add OAuth2 flow',
         lastActivityAt: new Date(),
@@ -96,7 +96,7 @@ export function DetailPanel({ workItem: propWorkItem, width = 480 }: DetailPanel
       },
       {
         id: 'artifact-2',
-        type: 'GOOGLE_DOC' as const,
+        type: ArtifactType.GOOGLE_DOC,
         url: 'https://docs.google.com/document/d/xxx',
         title: 'Auth Technical Spec',
         lastActivityAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
@@ -134,13 +134,13 @@ export function DetailPanel({ workItem: propWorkItem, width = 480 }: DetailPanel
   }, [workItem, acceptAiUpdate]);
 
   // Artifact icon mapping
-  const getArtifactIcon = (type: string) => {
+  const getArtifactIcon = (type: ArtifactType | string) => {
     switch (type) {
-      case 'GITHUB_PR':
-      case 'GITHUB_ISSUE':
+      case ArtifactType.GITHUB_PR:
+      case ArtifactType.GITHUB_ISSUE:
         return <GitHubIcon fontSize="small" />;
-      case 'GOOGLE_DOC':
-      case 'CONFLUENCE_PAGE':
+      case ArtifactType.GOOGLE_DOC:
+      case ArtifactType.CONFLUENCE_PAGE:
         return <DocIcon fontSize="small" />;
       default:
         return <LinkIcon fontSize="small" />;

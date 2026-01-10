@@ -1,20 +1,118 @@
 /**
  * GraphQL client configuration for WT-ROS API
  */
-import { GraphQLClient } from 'graphql-request';
+import { GraphQLClient, ClientError } from 'graphql-request';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/graphql';
+// API URL - ensure it points to the correct GraphQL endpoint
+const API_URL = process.env.NEXT_PUBLIC_API_URL
+  ? `${process.env.NEXT_PUBLIC_API_URL}/graphql`
+  : 'http://localhost:4000/graphql';
 
+/**
+ * Get authorization headers for GraphQL requests
+ */
+function getHeaders(): HeadersInit {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  const token = localStorage.getItem('wt-ros-token');
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  return {};
+}
+
+/**
+ * GraphQL client with proper error handling
+ */
 export const graphqlClient = new GraphQLClient(API_URL, {
-  headers: () => {
-    // Add auth headers when available
-    const token = typeof window !== 'undefined'
-      ? localStorage.getItem('wt-ros-token')
-      : null;
-
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  },
+  headers: getHeaders,
 });
+
+/**
+ * Error types for better error handling
+ */
+export interface GraphQLRequestError {
+  message: string;
+  code?: string;
+  isNetworkError: boolean;
+  isGraphQLError: boolean;
+  originalError?: Error;
+}
+
+/**
+ * Parse GraphQL errors into a consistent format
+ */
+export function parseGraphQLError(error: unknown): GraphQLRequestError {
+  if (error instanceof ClientError) {
+    // GraphQL error (validation, resolver errors, etc.)
+    const firstError = error.response?.errors?.[0];
+    return {
+      message: firstError?.message || 'GraphQL request failed',
+      code: firstError?.extensions?.code as string | undefined,
+      isNetworkError: false,
+      isGraphQLError: true,
+      originalError: error,
+    };
+  }
+
+  if (error instanceof TypeError && error.message.includes('fetch')) {
+    // Network error (server unreachable)
+    return {
+      message: 'Unable to connect to API server. Please check your connection.',
+      isNetworkError: true,
+      isGraphQLError: false,
+      originalError: error as Error,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      isNetworkError: error.message.includes('network') || error.message.includes('fetch'),
+      isGraphQLError: false,
+      originalError: error,
+    };
+  }
+
+  return {
+    message: 'An unexpected error occurred',
+    isNetworkError: false,
+    isGraphQLError: false,
+  };
+}
+
+/**
+ * Check if the API is reachable
+ */
+export async function checkApiHealth(): Promise<boolean> {
+  try {
+    const response = await fetch(API_URL.replace('/graphql', '/health'), {
+      method: 'GET',
+      signal: AbortSignal.timeout(3000), // 3 second timeout
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Safe GraphQL request wrapper with error handling
+ */
+export async function safeRequest<T>(
+  query: string,
+  variables?: Record<string, unknown>
+): Promise<{ data: T | null; error: GraphQLRequestError | null }> {
+  try {
+    const data = await graphqlClient.request<T>(query, variables);
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error: parseGraphQLError(error) };
+  }
+}
 
 /**
  * GraphQL queries for work items
@@ -224,6 +322,86 @@ export const USERS_QUERY = /* GraphQL */ `
       email
       displayName
       avatarUrl
+    }
+  }
+`;
+
+/**
+ * AI Insights Queries
+ */
+export const EXECUTIVE_SUMMARY_QUERY = /* GraphQL */ `
+  query ExecutiveSummary($groupId: ID) {
+    executiveSummary(groupId: $groupId) {
+      summary
+      highlights
+      metrics {
+        total
+        notStarted
+        inProgress
+        blocked
+        complete
+        cancelled
+        healthGreen
+        healthYellow
+        healthRed
+        healthUnknown
+        priorityP0
+        priorityP1
+        priorityP2
+        priorityP3
+        atRisk
+        needsHelp
+        stale
+        overdue
+        completionRate
+        healthScore
+      }
+      attentionItems {
+        id
+        title
+        reason
+        urgency
+        priority
+        daysOverdue
+        teamName
+      }
+      generatedAt
+    }
+  }
+`;
+
+export const RISK_ANALYSIS_QUERY = /* GraphQL */ `
+  query RiskAnalysis($groupId: ID) {
+    riskAnalysis(groupId: $groupId) {
+      overallRisk
+      riskScore
+      riskItems {
+        id
+        title
+        riskFactors
+        riskScore
+        priority
+        targetDate
+        daysToTarget
+      }
+      patterns {
+        type
+        description
+        affectedCount
+        severity
+      }
+      recommendations
+      generatedAt
+    }
+  }
+`;
+
+export const ASK_AI_QUERY = /* GraphQL */ `
+  query AskAI($question: String!, $groupId: ID) {
+    askAI(question: $question, groupId: $groupId) {
+      response
+      relatedItemIds
+      queriedAt
     }
   }
 `;
