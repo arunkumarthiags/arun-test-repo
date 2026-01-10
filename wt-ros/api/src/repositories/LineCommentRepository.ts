@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { Repository, QueryDeepPartialEntity } from 'typeorm';
 import { LineComment } from '../entities/LineComment.entity';
 import { AppDataSource } from '../config/data-source';
 
@@ -78,7 +78,7 @@ export class LineCommentRepository {
    * Update a comment
    */
   async update(id: string, data: Partial<LineComment>): Promise<LineComment | null> {
-    await this.repository.update(id, data);
+    await this.repository.update(id, data as QueryDeepPartialEntity<LineComment>);
     return this.findById(id);
   }
 

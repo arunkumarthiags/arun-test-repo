@@ -1,4 +1,4 @@
-import { Repository, SelectQueryBuilder, Brackets } from 'typeorm';
+import { Repository, SelectQueryBuilder, Brackets, QueryDeepPartialEntity } from 'typeorm';
 import { WorkItem } from '../entities/WorkItem.entity';
 import { AppDataSource } from '../config/data-source';
 import {
@@ -258,7 +258,7 @@ export class WorkItemRepository {
    * Get sort value from work item based on field
    */
   private getSortValue(item: WorkItem, field: string): string {
-    const value = (item as Record<string, unknown>)[field];
+    const value = (item as unknown as Record<string, unknown>)[field];
     if (value instanceof Date) {
       return value.toISOString();
     }
@@ -378,7 +378,7 @@ export class WorkItemRepository {
    * Update a work item
    */
   async update(id: string, data: Partial<WorkItem>): Promise<WorkItem | null> {
-    await this.repository.update(id, data);
+    await this.repository.update(id, data as QueryDeepPartialEntity<WorkItem>);
     return this.findById(id);
   }
 

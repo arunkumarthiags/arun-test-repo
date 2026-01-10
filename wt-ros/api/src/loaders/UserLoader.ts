@@ -60,8 +60,8 @@ export const createUserByEmailLoader = (): DataLoader<string, User | null> => {
  * Batch load multiple users by their IDs.
  * Used for loading mentioned users in comments.
  */
-export const createUsersByIdsLoader = (): DataLoader<string[], User[]> => {
-  return new DataLoader<string[], User[]>(
+export const createUsersByIdsLoader = (): DataLoader<string[], User[], string> => {
+  return new DataLoader<string[], User[], string>(
     async (idArrays: readonly string[][]) => {
       const userRepository = AppDataSource.getRepository(User);
 

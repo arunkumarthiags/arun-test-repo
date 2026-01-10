@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { Repository, QueryDeepPartialEntity } from 'typeorm';
 import { WorkUpdate } from '../entities/WorkUpdate.entity';
 import { AppDataSource } from '../config/data-source';
 
@@ -95,7 +95,7 @@ export class WorkUpdateRepository {
    * Update a work update
    */
   async update(id: string, data: Partial<WorkUpdate>): Promise<WorkUpdate | null> {
-    await this.repository.update(id, data);
+    await this.repository.update(id, data as QueryDeepPartialEntity<WorkUpdate>);
     return this.findById(id);
   }
 
