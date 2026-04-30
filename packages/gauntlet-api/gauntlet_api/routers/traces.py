@@ -39,9 +39,12 @@ def ingest_trace(
     try:
         from ..workers.tasks import score_trace_task
         score_trace_task.delay(str(trace.id))
+        # In Celery eager mode (used by tests) the task ran in-process on its own
+        # session and committed; pull the updated row into our session.
+        db.refresh(trace)
     except Exception:
-        # If broker is unreachable in tests, score inline as a fallback so the
-        # API still returns a fully-scored trace for dev workflows.
+        # If broker is unreachable, score inline as a fallback so the API still
+        # returns a fully-scored trace for dev / disconnected workflows.
         from ..scorers.engine import score_trace
         score_trace(db, trace)
         db.commit()

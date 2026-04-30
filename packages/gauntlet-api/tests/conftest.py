@@ -42,6 +42,22 @@ os.environ.setdefault(
 import pytest
 
 
+def _force_celery_eager() -> None:
+    """Make `.delay()` execute the task body inline so tests don't depend on a
+    running Celery worker. Importing celery_app here also wires module load."""
+    try:
+        from gauntlet_api.workers.celery_app import celery_app
+        celery_app.conf.task_always_eager = True
+        celery_app.conf.task_eager_propagates = False
+        celery_app.conf.broker_url = "memory://"
+        celery_app.conf.result_backend = "cache+memory://"
+    except Exception:
+        pass
+
+
+_force_celery_eager()
+
+
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+psycopg://gauntlet:gauntlet@localhost:5432/gauntlet_test",
