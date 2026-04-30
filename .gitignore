@@ -15,6 +15,8 @@ venv/
 node_modules/
 .vite/
 frontend/dist/
+frontend/tsconfig.tsbuildinfo
+frontend/src/**/*.js
 
 # Env
 .env
@@ -31,3 +33,9 @@ Thumbs.db
 
 # Docker volumes
 pgdata/
+
+# TLS material — never commit real certificates/keys
+nginx/certs/*.pem
+nginx/certs/*.key
+nginx/certs/*.crt
+!nginx/certs/.gitkeep

@@ -15,7 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    # pgvector extension is optional; embeddings are stored as JSONB.
+    # op.execute("CREATE EXTENSION IF NOT EXISTS vector")
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
 
     op.create_table(

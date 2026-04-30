@@ -2,10 +2,11 @@
 name = "gauntlet-api"
 version = "0.1.0"
 description = "Gauntlet — eval-as-CI/CD for AI agents"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
+  "gunicorn>=22.0",
   "pydantic>=2.7",
   "pydantic-settings>=2.3",
   "sqlalchemy>=2.0",
