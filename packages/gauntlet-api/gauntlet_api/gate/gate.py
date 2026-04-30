@@ -13,7 +13,6 @@ import hashlib
 import json
 import statistics
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
@@ -143,7 +142,10 @@ def run_gate(
         report_dict["cached"] = True
         return GateReport(**report_dict)
 
-    # ── Run all cases in parallel ─────────────────────────────────────────
+    # Run cases. Network calls to the user's deployed agent would be the
+    # actual IO; we keep the pool but execute simulate-and-score sequentially
+    # because the SQLAlchemy session is not thread-safe. Replace _simulate
+    # with an HTTP call and split scoring off-thread for real concurrency.
     def _run(case: EvalCase) -> tuple[EvalCase, Trace, dict]:
         trace = _simulate_agent_run(case, agent_version)
         db.add(trace)
@@ -151,11 +153,7 @@ def run_gate(
         result = score_trace(db, trace)
         return case, trace, result
 
-    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as ex:
-        # Run synchronously inside the same db session — the threadpool here is
-        # for IO-style parallelism in real deployments where _run hits an HTTP
-        # agent. For this demo we materialize the list eagerly.
-        results = [ _run(c) for c in corpus ]
+    results = [_run(c) for c in corpus]
 
     baseline = _previous_baseline(db, agent_id) or {}
     prev_cost, prev_latency_p50 = _previous_cost_latency(db, agent_id)

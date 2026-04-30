@@ -76,6 +76,104 @@ def test_clusters_routes(client, db):
     r = client.get(f"/v1/clusters/{cid}/examples")
     assert r.status_code == 200
 
+    # 404 paths for cluster routes
+    r = client.patch(f"/v1/clusters/{uuid.uuid4()}", json={"name": "x"})
+    assert r.status_code == 404
+    r = client.get(f"/v1/clusters/{uuid.uuid4()}/examples")
+    assert r.status_code == 404
+
+
+def test_clusters_merge(client, db):
+    a = FailureCluster(agent_id="agent-mg", name="cat-a", description="A")
+    b = FailureCluster(agent_id="agent-mg", name="cat-b", description="B")
+    db.add(a)
+    db.add(b)
+    db.commit()
+    db.refresh(a)
+    db.refresh(b)
+
+    # Seed a trace tagged with cat-b so the merge rewrites failure_categories.
+    t = Trace(
+        agent_id="agent-mg", version="v", input={}, output={}, steps=[],
+        total_tokens=0, total_cost_usd=0, latency_ms=0,
+        scores={}, failure_categories=["cat-b"], source="production",
+    )
+    db.add(t)
+    db.commit()
+
+    r = client.post(f"/v1/clusters/{a.id}/merge/{b.id}")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["id"] == str(a.id)
+
+    # Merging from a different agent → 409
+    other = FailureCluster(agent_id="other-agent", name="cat-c", description="C")
+    db.add(other)
+    db.commit()
+    db.refresh(other)
+    r = client.post(f"/v1/clusters/{a.id}/merge/{other.id}")
+    assert r.status_code == 409
+
+    # 404 paths for merge
+    r = client.post(f"/v1/clusters/{uuid.uuid4()}/merge/{uuid.uuid4()}")
+    assert r.status_code == 404
+
+
+def test_traces_list_and_get(client, db):
+    t = Trace(
+        agent_id="agent-trlist", version="v", input={}, output={}, steps=[],
+        total_tokens=0, total_cost_usd=0, latency_ms=0,
+        scores={}, failure_categories=[], source="production",
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+
+    r = client.get("/v1/traces", params={"agent_id": "agent-trlist", "source": "production"})
+    assert r.status_code == 200
+    body = r.json()
+    assert any(row["id"] == str(t.id) for row in body)
+
+    r = client.get(f"/v1/traces/{t.id}")
+    assert r.status_code == 200
+    assert r.json()["id"] == str(t.id)
+
+    r = client.get(f"/v1/traces/{uuid.uuid4()}")
+    assert r.status_code == 404
+
+
+def test_eval_cases_filters(client, db):
+    case = EvalCase(
+        agent_id="agent-fil",
+        input={"description": "x"},
+        rubric="r",
+        difficulty=4,
+        cluster_tag="cat-1",
+        generation_method="adversarial",
+        golden=True,
+    )
+    db.add(case)
+    db.commit()
+    r = client.get("/v1/eval-cases", params={
+        "agent_id": "agent-fil",
+        "cluster_tag": "cat-1",
+        "generation_method": "adversarial",
+        "golden": True,
+        "difficulty": 4,
+    })
+    assert r.status_code == 200
+    assert len(r.json()) == 1
+
+    # Cannot delete a golden case → 409
+    r = client.delete(f"/v1/eval-cases/{case.id}")
+    assert r.status_code == 409
+    # Patch missing case → 404
+    r = client.patch(f"/v1/eval-cases/{uuid.uuid4()}", json={"rubric": "x"})
+    assert r.status_code == 404
+    # Delete missing case → 404
+    r = client.delete(f"/v1/eval-cases/{uuid.uuid4()}")
+    assert r.status_code == 404
+
 
 def test_eval_cases_routes(client):
     payload = {
@@ -230,6 +328,15 @@ def test_adversarial_routes(client, db):
     body = r.json()
     assert body["ok"] is True
     assert body["promoted_count"] == 1
+
+    # 404 paths
+    r = client.get(f"/v1/adversarial/jobs/{uuid.uuid4()}")
+    assert r.status_code == 404
+    r = client.post(
+        f"/v1/adversarial/jobs/{uuid.uuid4()}/decide",
+        json={"approvals": {}},
+    )
+    assert r.status_code == 404
 
 
 def test_gate_route(client, db):

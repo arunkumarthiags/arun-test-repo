@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  api-tests:
+    name: gauntlet-api (pytest + coverage)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gauntlet
+          POSTGRES_PASSWORD: gauntlet
+          POSTGRES_DB: gauntlet_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gauntlet"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://gauntlet:gauntlet@localhost:5432/gauntlet_test
+      TEST_DATABASE_URL: postgresql+psycopg://gauntlet:gauntlet@localhost:5432/gauntlet_test
+      REDIS_URL: redis://localhost:6379/0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install gauntlet-api (with dev extras)
+        working-directory: packages/gauntlet-api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pytest-cov
+
+      - name: Run API test suite with coverage
+        working-directory: packages/gauntlet-api
+        run: |
+          python -m pytest tests/ \
+            --cov=gauntlet_api \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:coverage-html \
+            --cov-fail-under=80
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage-report
+          path: |
+            packages/gauntlet-api/coverage.xml
+            packages/gauntlet-api/coverage-html
+
+  sdk-tests:
+    name: gauntlet-sdk (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install gauntlet-sdk
+        working-directory: packages/gauntlet-sdk
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" || pip install -e .
+          pip install pytest
+
+      - name: Run SDK test suite
+        working-directory: packages/gauntlet-sdk
+        run: python -m pytest tests/ -v
+
+  frontend-build:
+    name: frontend (tsc + vite build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type-check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build

@@ -168,6 +168,7 @@ def _enqueue_prod_failure_for_adversarial(db: Session, trace: Trace) -> None:
         examples = (examples + [trace.id])[-20:]
         cluster.example_trace_ids = examples
     cluster.adversarial_queue_triggered_at = datetime.now(timezone.utc)
+    db.flush()  # persist the cluster mutation regardless of caller's commit order
     try:
         from ..workers.tasks import generate_adversarial_task
         generate_adversarial_task.delay(str(cluster.id))

@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -135,9 +136,6 @@ def _anthropic_judge(
         prompt_hash=_prompt_hash(prompt),
         input_payload=payload,
     )
-
-
-import re  # noqa: E402  (used inside _heuristic_judge)
 
 
 def judge(
