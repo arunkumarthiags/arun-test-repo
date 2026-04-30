@@ -1,0 +1,41 @@
+[project]
+name = "gauntlet-api"
+version = "0.1.0"
+description = "Gauntlet — eval-as-CI/CD for AI agents"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "psycopg[binary]>=3.2",
+  "pgvector>=0.3",
+  "redis>=5.0",
+  "celery>=5.4",
+  "httpx>=0.27",
+  "click>=8.1",
+  "numpy>=1.26",
+  "python-dateutil>=2.9",
+  "tenacity>=9.0",
+  "anthropic>=0.40",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.5",
+]
+
+[project.scripts]
+gauntlet = "gauntlet_cli.main:cli"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gauntlet_api*", "gauntlet_cli*"]

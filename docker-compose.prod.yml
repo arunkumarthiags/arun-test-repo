@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gauntlet}
+      POSTGRES_USER: ${POSTGRES_USER:-gauntlet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+  api:
+    build:
+      context: ./packages/gauntlet-api
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-gauntlet}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gauntlet}
+      REDIS_URL: redis://redis:6379/0
+      GAUNTLET_ENV: prod
+    depends_on: [postgres, redis]
+    restart: always
+    command: ["uvicorn", "gauntlet_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+
+  worker:
+    build:
+      context: ./packages/gauntlet-api
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-gauntlet}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gauntlet}
+      REDIS_URL: redis://redis:6379/0
+    depends_on: [postgres, redis]
+    restart: always
+    command: ["celery", "-A", "gauntlet_api.workers.celery_app", "worker", "--loglevel=info", "--concurrency=8", "-Q", "scoring,classify,adversarial,drift,gate"]
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - frontend-build:/usr/share/nginx/html:ro
+    depends_on: [api]
+    restart: always
+
+  frontend-build:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - frontend-build:/app/dist
+    command: ["sh", "-c", "npm ci && npm run build"]
+
+volumes:
+  pgdata:
+  frontend-build:

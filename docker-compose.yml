@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: gauntlet
+      POSTGRES_USER: gauntlet
+      POSTGRES_PASSWORD: gauntlet
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gauntlet"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ./packages/gauntlet-api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://gauntlet:gauntlet@postgres:5432/gauntlet
+      REDIS_URL: redis://redis:6379/0
+      GAUNTLET_ENV: dev
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/gauntlet-api:/app
+    command: ["uvicorn", "gauntlet_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  worker:
+    build:
+      context: ./packages/gauntlet-api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://gauntlet:gauntlet@postgres:5432/gauntlet
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/gauntlet-api:/app
+    command: ["celery", "-A", "gauntlet_api.workers.celery_app", "worker", "--loglevel=info", "-Q", "scoring,classify,adversarial,drift,gate"]
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    command: ["sh", "-c", "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0"]
+
+volumes:
+  pgdata:
