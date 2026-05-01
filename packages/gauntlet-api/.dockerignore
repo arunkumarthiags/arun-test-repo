@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Source-control
+.git
+.gitignore
+.github
+
+# Local secrets / env
+.env
+.env.*
+
+# Tests aren't needed inside the prod image (the test agent handles those).
+tests/
+
+# Misc
+*.log
+*.sqlite
+*.sqlite3

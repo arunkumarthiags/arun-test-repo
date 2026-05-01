@@ -1,0 +1,81 @@
+name: "Gauntlet Gate"
+description: "Run the Gauntlet deploy gate against a candidate agent version. Fails the build on regression."
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  api_key:
+    description: "Gauntlet API key"
+    required: true
+  api_url:
+    description: "Gauntlet API URL"
+    required: false
+    default: "https://api.gauntlet.ai"
+  agent_id:
+    description: "Agent identifier"
+    required: true
+  agent_version:
+    description: "Agent version (commit SHA, tag, or semver)"
+    required: true
+  fail_on_regression:
+    description: "Exit non-zero on regression"
+    required: false
+    default: "true"
+  concurrency:
+    description: "Parallel evals"
+    required: false
+    default: "8"
+  post_pr_comment:
+    description: "Post a PR comment with the report (requires GITHUB_TOKEN env)"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install gauntlet CLI
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        # Replace with the published wheel once on PyPI.
+        pip install gauntlet-api || pip install -e ${{ github.action_path }}/../../../packages/gauntlet-api
+
+    - name: Run gate
+      id: run_gate
+      shell: bash
+      env:
+        GAUNTLET_API_KEY: ${{ inputs.api_key }}
+        GAUNTLET_API_URL: ${{ inputs.api_url }}
+      run: |
+        set -e
+        gauntlet gate \
+          --agent-id "${{ inputs.agent_id }}" \
+          --version "${{ inputs.agent_version }}" \
+          --concurrency "${{ inputs.concurrency }}" \
+          ${{ inputs.fail_on_regression == 'true' && '--fail-on-regression' || '--no-fail-on-regression' }} \
+          --report-out "$RUNNER_TEMP/gauntlet-report.json" \
+          --pr-comment-out "$RUNNER_TEMP/gauntlet-comment.md"
+
+    - name: Post PR comment
+      if: ${{ github.event_name == 'pull_request' && inputs.post_pr_comment == 'true' && always() }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+      run: |
+        gauntlet post-pr-comment \
+          --report-file "$RUNNER_TEMP/gauntlet-report.json" \
+          --repo "${{ github.repository }}" \
+          --pr-number "${{ github.event.pull_request.number }}" || true
+
+    - name: Upload report artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: gauntlet-report
+        path: ${{ runner.temp }}/gauntlet-report.json
